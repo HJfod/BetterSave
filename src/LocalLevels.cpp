@@ -10,9 +10,15 @@
 
 using namespace geode::prelude;
 
-struct $modify(CategorizedLevel, GJGameLevel) {
-	save::LevelCategory* category = nullptr;
+using TrashClock = std::chrono::system_clock;
+using TrashTime = std::chrono::time_point<std::chrono::system_clock>;
+
+struct TrashedLevel {
+	Ref<GJGameLevel> level;
+	TrashTime time;
 };
+
+static std::vector<TrashedLevel> TRASHCAN {};
 
 static std::string convertToKebabCase(std::string const& str) {
 	std::string res {};
@@ -43,8 +49,36 @@ static std::string convertToKebabCase(std::string const& str) {
 	return res;
 }
 
-static std::string freeIDForLevel(GJGameLevel* level, LevelCategory* category) {
-	
+static void migrateLevel(GJGameLevel* level) {
+	// synthesize an ID for the level by taking the level name in kebab-case 
+	// and then adding an incrementing number at the end until there exists 
+	// no folder with the same name already
+	auto name = convertToKebabCase(level->m_levelName);
+	auto id = name;
+	size_t counter = 0;
+	while (
+		// check both save dir and trashcan for free ID
+		ghc::filesystem::exists(save::getLevelsSaveDir() / id) ||
+		ghc::filesystem::exists(save::getTrashcanDir() / id)
+	) {
+		id = name + "-" + std::to_string(counter);
+	}
+
+	// create the level's save directory in order to reserve the ID
+	(void)file::createDirectoryAll(save::getLevelsSaveDir() / id);
+
+	level->setID(id);
+
+	log::info("Level {} was assigned ID '{}'", level->m_levelName, level->getID());
+
+	// save the level's data as a .gmd file
+	auto res = gmd::exportLevelAsGmd(level, save::getLevelsSaveDir() / "level.gmd");
+	if (!res) {
+		log::error("Unable to save level '{}': {}", id, res.error());
+	}
+	else {
+		log::info("Level '{}' was saved to level.gmd", level->getID());
+	}
 }
 
 static void migrateLevels() {
@@ -55,10 +89,49 @@ static void migrateLevels() {
 
 	// migrate all existing local levels
 	for (auto& level : CCArrayExt<GJGameLevel>(LocalLevelManager::get()->m_localLevels)) {
-		save::moveLevelToCategory(level, save::getLocalLevelsCategory());
+		if (level->getID().empty()) {
+			migrateLevel(level);
+		}
 	}
 
 	log::info("Migration done");
+}
+
+static void loadLevels(bool trash) {
+	auto dir = trash ? save::getTrashcanDir() : save::getLevelsSaveDir();
+	// read levels
+	for (auto levelDir : file::readDirectory(dir).unwrapOr(std::vector<ghc::filesystem::path> {})) {
+		// skip non-dirs; all levels should be in their own category
+		if (!ghc::filesystem::is_directory(levelDir)) {
+			continue;
+		}
+		// skip .trash and any folders like that
+		if (levelDir.has_extension()) {
+			continue;
+		}
+		// load level from GMD file
+		auto levelRes = gmd::importGmdAsLevel(levelDir / "level.gmd");
+		if (!levelRes) {
+			log::info("Unable to load {}: {}", dir / "level.gmd", levelRes.unwrapErr());
+			continue;
+		}
+		auto level = levelRes.unwrap();
+		level->setID(levelDir.filename().string());
+
+		if (trash) {
+			auto timeBin = file::readBinary(levelDir / "trashtime").unwrapOr(
+				toByteArray(std::chrono::system_clock::now())
+			);
+			std::chrono::seconds dur(*reinterpret_cast<TrashClock::rep*>(timeBin.data()));
+			TRASHCAN.push_back(TrashedLevel {
+				.level = level,
+				.time = TrashTime(dur),
+			});
+		}
+		else {
+			LocalLevelManager::get()->m_localLevels->addObject(level);
+		}
+	}
 }
 
 static void loadLocalLevels() {
@@ -67,177 +140,19 @@ static void loadLocalLevels() {
 	// migrate old levels if there are any that haven't been migrated yet
 	migrateLevels();
 
-	save::loadLevelsForCategory(save::getLocalLevelsCategory());
-	save::loadLevelsForCategory(save::getTrashcanCategory());
+	// load normal levels first, trashcan afterwards
+	loadLevels(false);
+	loadLevels(true);
 
 	log::info("Loading done");
-}
-
-void save::loadLevelsForCategory(LevelCategory* category) {
-	log::info("Loading levels for category '{}'", category->getID());
-
-	// read levels
-	for (auto dir : file::readDirectory(category->getDir())) {
-		// skip non-dirs; all levels should be in their own category
-		if (!ghc::filesystem::is_directory(dir)) {
-			continue;
-		}
-		// load level from GMD file
-		auto levelRes = gmd::importGmdAsLevel(dir / "level.gmd");
-		if (!levelRes) {
-			log::info("Unable to load {}: {}", dir / "level.gmd", levelRes.unwrapErr());
-			continue;
-		}
-		auto level = levelRes.unwrap();
-		// add level to category
-		// preset the category field so moveLevelToCategory doesn't do anything 
-		static_cast<CategorizedLevel*>(level)->m_fields->category = category;
-		category->addLevel(level);
-	}
 }
 
 ghc::filesystem::path save::getLevelsSaveDir() {
 	return dirs::getSaveDir() / "levels";
 }
 
-void save::moveLevelToCategory(GJGameLevel* level, LevelCategory* category) {
-	// this is in case the category that previously held this level is 
-	// the only strong ref to the GJGameLevel
-	auto guard = Ref(level);
-
-	// remove from old category
-	if (auto cat = save::getCategoryForLevel(level)) {
-		cat->removeLevel(level);
-	}
-	
-	// if a new category was provided, move level's save data there
-	if (category) {
-
-	}
-	// add to new one
-	category->addLevel(level);
-	static_cast<CategorizedLevel*>(level)->m_fields->category = category;
-}
-
-LevelCategory* save::getCategoryForLevel(GJGameLevel* level) {
-	static_cast<CategorizedLevel*>(level)->m_fields->category;
-}
-
-void save::LevelCategory::addLevel(GJGameLevel* level) {
-	m_levels.push_back(level);
-
-	auto categoryID = this->getID();
-
-	// synthesize an ID for the level by taking the level name in kebab-case 
-	// and then adding an incrementing number at the end until there exists 
-	// no folder with the same name already in savedata/levels
-	auto name = convertToKebabCase(level->m_levelName);
-	auto id = name;
-	size_t counter = 0;
-	while (ghc::filesystem::exists(save::getLevelsSaveDir() / categoryID / id)) {
-		id = name + "-" + std::to_string(counter);
-	}
-
-	// create the level's save directory in order to reserve the ID
-	auto saveDir = save::getLevelsSaveDir() / categoryID / id;
-	(void)file::createDirectoryAll(saveDir);
-
-	// actually set the id
-	level->setID(id);
-
-	log::info("Level {} was assigned ID '{}'", level->m_levelName, level->getID());
-
-	// if the level has data already, save it as a .gmd file
-	if (!level->m_levelString.empty()) {
-		auto res = gmd::exportLevelAsGmd(level, saveDir / "level.gmd");
-		if (!res) {
-			log::error("Unable to save level '{}': {}", id, res.error());
-		}
-		else {
-			log::info("Level '{}' was saved to level.gmd", level->getID());
-		}
-	}
-}
-
-void save::LevelCategory::removeLevel(GJGameLevel* level) {
-	// make sure the level has an ID (if you do path / "" it results in just path
-	// which is very undesirable)
-	if (level->getID().empty()) {
-		return;
-	}
-	// todo: move all file logic to moveLevelToCategory
-	// todo: preserve all files in the directory
-	auto categoryID = this->getID();
-	auto saveDir = save::getLevelsSaveDir() / categoryID / level->getID();
-	if (ghc::filesystem::exists(saveDir)) {
-		// delete level's save directory
-		ghc::filesystem::remove_all(saveDir);
-		// reset ID to mark it as not being in the system anymore
-		level->setID("");
-		// remove the level from m_levels
-		ranges::remove(m_levels, [](Ref<GJGameLevel> lvl) {
-			return lvl == level;
-		});
-	}
-}
-
-std::vector<Ref<GJGameLevel>> save::LevelCategory::getLevels() const {
-	return m_levels;
-}
-
-ghc::filesystem::path save::LevelCategory::getDir() const {
-	return save::getLevelsSaveDir() / category->getID();
-}
-
-class LocalLevelsCategory : public save::LevelCategory {
-	void addLevel(GJGameLevel* level) override {
-		LevelCategory::addLevel(level);
-		LocalLevelManager::get()->m_localLevels->addObject(level);
-	}
-
-	void removeLevel(GJGameLevel* level) override {
-		LevelCategory::removeLevel(level);
-		LocalLevelManager::get()->m_localLevels->removeObject(level);
-	}
-
-public:
-	std::string getID() const override {
-		return "local";
-	}
-
-	static LocalLevelsCategory* get() {
-		static auto ret = new LocalLevelsCategory();
-		return ret;
-	}
-};
-
-class TrashcanCategory : public save::LevelCategory {
-	void addLevel(GJGameLevel* level) override {
-		LevelCategory::addLevel(level);
-		// save the time this level was added to the trashcan
-		file::writeBinary(
-			save::getLevelsSaveDir() / level->getID() / ".trashed",
-			toByteArray(std::chrono::system_clock::now().time_since_epoch().count())
-		)
-	}
-
-public:
-	std::string getID() const override {
-		return "trashcan";
-	}
-
-	static TrashcanCategory* get() {
-		static auto ret = new TrashcanCategory();
-		return ret;
-	}
-};
-
-LevelCategory* save::getLocalLevelsCategory() {
-	return LocalLevelsCategory::get();
-}
-
-LevelCategory* save::getTrashcanCategory() {
-	return TrashcanCategory::get();
+ghc::filesystem::path save::getTrashcanDir() {
+	return dirs::getSaveDir() / "levels" / ".trash";
 }
 
 struct $modify(LocalLevelManager) {
@@ -261,7 +176,7 @@ struct $modify(EditorPauseLayer) {
 struct $modify(GameLevelManager) {
 	void deleteLevel(GJGameLevel* level) {
 		if (level->m_levelType == GJLevelType::Editor) {
-			save::moveLevelToCategory(level, TrashcanCategory::get());
+			// save::moveLevelToCategory(level, TrashcanCategory::get());
 		}
 		GameLevelManager::deleteLevel(level);
 	}
