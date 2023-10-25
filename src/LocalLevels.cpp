@@ -1,6 +1,7 @@
 
 #include <LocalLevels.hpp>
 #include <Geode/utils/cocos.hpp>
+#include <Geode/modify/LevelEditorLayer.hpp>
 #include <Geode/modify/LocalLevelManager.hpp>
 #include <Geode/modify/EditorPauseLayer.hpp>
 #include <Geode/modify/GameLevelManager.hpp>
@@ -12,6 +13,15 @@ using namespace geode::prelude;
 
 using TrashClock = std::chrono::system_clock;
 using TrashTime = std::chrono::time_point<std::chrono::system_clock>;
+using TrashUnit = std::chrono::minutes;
+
+static ByteVector currentTimeAsBytes() {
+	return toByteArray(
+		std::chrono::duration_cast<TrashUnit>(
+			TrashClock::now().time_since_epoch()
+		).count()
+	);
+}
 
 struct TrashedLevel {
 	Ref<GJGameLevel> level;
@@ -49,7 +59,17 @@ static std::string convertToKebabCase(std::string const& str) {
 	return res;
 }
 
-static void migrateLevel(GJGameLevel* level) {
+static std::vector<GJGameLevel*> iterLoadedLevels() {
+	auto levels = std::vector<GJGameLevel*> {};
+	auto local = ccArrayToVector<GJGameLevel*>(LocalLevelManager::get()->m_localLevels);
+	levels.insert(levels.begin(), local.begin(), local.end());
+	for (auto& trashed : TRASHCAN) {
+		levels.push_back(trashed.level.data());
+	}
+	return levels;
+}
+
+static void assignIDToLevel(GJGameLevel* level) {
 	// synthesize an ID for the level by taking the level name in kebab-case 
 	// and then adding an incrementing number at the end until there exists 
 	// no folder with the same name already
@@ -70,11 +90,17 @@ static void migrateLevel(GJGameLevel* level) {
 	level->setID(id);
 
 	log::info("Level {} was assigned ID '{}'", level->m_levelName, level->getID());
+}
+
+static void saveLevel(GJGameLevel* level) {
+	if (level->getID().empty()) {
+		assignIDToLevel(level);
+	}
 
 	// save the level's data as a .gmd file
-	auto res = gmd::exportLevelAsGmd(level, save::getLevelsSaveDir() / "level.gmd");
+	auto res = gmd::exportLevelAsGmd(level, save::getLevelsSaveDir() / level->getID() / "level.gmd");
 	if (!res) {
-		log::error("Unable to save level '{}': {}", id, res.error());
+		log::error("Unable to save level '{}': {}", level->getID(), res.error());
 	}
 	else {
 		log::info("Level '{}' was saved to level.gmd", level->getID());
@@ -87,14 +113,17 @@ static void migrateLevels() {
 	// make sure to create the save directory
 	(void)file::createDirectoryAll(save::getLevelsSaveDir());
 
+	size_t count = 0;
+
 	// migrate all existing local levels
 	for (auto& level : CCArrayExt<GJGameLevel>(LocalLevelManager::get()->m_localLevels)) {
 		if (level->getID().empty()) {
-			migrateLevel(level);
+			saveLevel(level);
+			count += 1;
 		}
 	}
 
-	log::info("Migration done");
+	log::info("Migrated {} levels", count);
 }
 
 static void loadLevels(bool trash) {
@@ -109,6 +138,13 @@ static void loadLevels(bool trash) {
 		if (levelDir.has_extension()) {
 			continue;
 		}
+		auto id = levelDir.filename().string();
+		// check that this level isn't already loaded
+		for (auto& level : iterLoadedLevels()) {
+			if (level->getID() == id) {
+				continue;
+			}
+		}
 		// load level from GMD file
 		auto levelRes = gmd::importGmdAsLevel(levelDir / "level.gmd");
 		if (!levelRes) {
@@ -116,13 +152,12 @@ static void loadLevels(bool trash) {
 			continue;
 		}
 		auto level = levelRes.unwrap();
-		level->setID(levelDir.filename().string());
+		level->setID(id);
 
 		if (trash) {
-			auto timeBin = file::readBinary(levelDir / "trashtime").unwrapOr(
-				toByteArray(std::chrono::system_clock::now())
-			);
-			std::chrono::seconds dur(*reinterpret_cast<TrashClock::rep*>(timeBin.data()));
+			auto timeBin = file::readBinary(levelDir / "trashtime")
+				.unwrapOr(currentTimeAsBytes());
+			TrashUnit dur(*reinterpret_cast<TrashUnit::rep*>(timeBin.data()));
 			TRASHCAN.push_back(TrashedLevel {
 				.level = level,
 				.time = TrashTime(dur),
@@ -131,6 +166,8 @@ static void loadLevels(bool trash) {
 		else {
 			LocalLevelManager::get()->m_localLevels->addObject(level);
 		}
+
+		log::info("Loaded '{}'", id);
 	}
 }
 
@@ -155,9 +192,40 @@ ghc::filesystem::path save::getTrashcanDir() {
 	return dirs::getSaveDir() / "levels" / ".trash";
 }
 
+Result<> save::moveLevelToTrash(GJGameLevel* level) {
+	try {
+		auto target = save::getTrashcanDir() / level->getID();
+		ghc::filesystem::rename(
+			save::getLevelsSaveDir() / level->getID(), target
+		);
+		GEODE_UNWRAP(file::writeBinary(target / "trashtime", currentTimeAsBytes())
+			.expect("Unable to save removal time: {error}"));
+		log::info("Moved level '{}' to trash", level->getID());
+		return Ok();
+	}
+	catch(std::exception& e) {
+		return Err("Unable to move level to trash: {}", e.what());
+	}
+}
+
+Result<> save::untrashLevel(GJGameLevel* level) {
+	try {
+		auto target = save::getLevelsSaveDir() / level->getID();
+		ghc::filesystem::rename(
+			save::getTrashcanDir() / level->getID(), target
+		);
+		ghc::filesystem::remove(target / "trashtime");
+		log::info("Restored level '{}' from trash", level->getID());
+		return Ok();
+	}
+	catch(std::exception& e) {
+		return Err("Unable to return level from trash: {}", e.what());
+	}
+}
+
 struct $modify(LocalLevelManager) {
 	void encodeDataTo(DS_Dictionary*) {
-		// levels are saved individually
+		// levels are saved individually in EditorPauseLayer::saveLevel
 	}
 
 	void dataLoaded(DS_Dictionary* dict) {
@@ -170,13 +238,20 @@ struct $modify(LocalLevelManager) {
 struct $modify(EditorPauseLayer) {
 	void saveLevel() {
 		EditorPauseLayer::saveLevel();
+		// this also assigns ids to any newly created levels
+		::saveLevel(m_editorLayer->m_level);
+		log::info("Saved '{}'", m_editorLayer->m_level->getID());
 	}
 };
 
 struct $modify(GameLevelManager) {
 	void deleteLevel(GJGameLevel* level) {
 		if (level->m_levelType == GJLevelType::Editor) {
-			// save::moveLevelToCategory(level, TrashcanCategory::get());
+			auto res = save::moveLevelToTrash(level);
+			if (!res) {
+				log::error("Unable to move level to trash: {} - refusing to delete", res.unwrapErr());
+				return;
+			}
 		}
 		GameLevelManager::deleteLevel(level);
 	}
