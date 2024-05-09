@@ -368,6 +368,25 @@ Result<> save::permanentlyDelete(GJGameLevel* level) {
 
 	return Ok();
 }
+Result<> save::clearTrash() {
+	if (!ghc::filesystem::exists(getTrashcanDir())) {
+		return Ok();
+	}
+	
+	std::error_code ec;
+	ghc::filesystem::remove_all(getTrashcanDir(), ec);
+	if (ec) {
+		return Err("Unable to delete the trashcan directory: {} (error code {})", ec.message(), ec.value());
+	}
+	TRASHCAN.clear();
+
+	auto ev = TrashLevelEvent();
+	ev.m_impl->level = nullptr;
+	ev.m_impl->mode = TrashLevelEvent::Impl::Delete;
+	ev.post();
+
+	return Ok();
+}
 std::vector<TrashedLevel> save::getLevelsInTrash() {
 	return TRASHCAN;
 }

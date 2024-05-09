@@ -46,6 +46,12 @@ bool TrashcanPopup::setup() {
     border->setContentSize(m_scrollingLayer->getContentSize());
     m_mainLayer->addChildAtPosition(border, Anchor::Center);
 
+    auto deleteAllSpr = CCSprite::createWithSpriteFrameName("GJ_resetBtn_001.png");
+    auto deleteAllBtn = CCMenuItemSpriteExtra::create(
+        deleteAllSpr, this, menu_selector(TrashcanPopup::onDeleteAll)
+    );
+    m_buttonMenu->addChildAtPosition(deleteAllBtn, Anchor::BottomLeft, ccp(20, 20));
+
     m_listener.bind([this](auto*) {
         this->updateList();
         return ListenerResult::Propagate;
@@ -173,6 +179,26 @@ void TrashcanPopup::onRestore(CCObject* sender) {
             "OK"
         )->show();
     }
+}
+void TrashcanPopup::onDeleteAll(CCObject*) {
+    createQuickPopup(
+        "Clear Trashcan",
+        "Are you sure you want to <co>clear the Trashcan</c>?\n"
+        "<cr>This will PERMANENTLY delete ALL levels in the trash!</c>",
+        "Cancel", "Delete All",
+        [](auto*, bool btn2) {
+            if (btn2) {
+                auto res = save::clearTrash();
+                if (!res) {
+                    FLAlertLayer::create(
+                        "Failed to Clear",
+                        fmt::format("Failed to clear trash: {}", res.unwrapErr()),
+                        "OK"
+                    )->show();
+                }
+            }
+        }
+    );
 }
 
 TrashcanPopup* TrashcanPopup::create() {

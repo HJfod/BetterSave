@@ -16,6 +16,7 @@ protected:
     void onInfo(CCObject* sender);
     void onDelete(CCObject* sender);
     void onRestore(CCObject* sender);
+    void onDeleteAll(CCObject* sender);
 
 public:
     static TrashcanPopup* create();

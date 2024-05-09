@@ -30,6 +30,7 @@ namespace save {
     HJFOD_BETTERSAVE_DLL geode::Result<> moveLevelToTrash(GJGameLevel* level);
     HJFOD_BETTERSAVE_DLL geode::Result<> untrashLevel(GJGameLevel* level);
     HJFOD_BETTERSAVE_DLL geode::Result<> permanentlyDelete(GJGameLevel* level);
+    HJFOD_BETTERSAVE_DLL geode::Result<> clearTrash();
     HJFOD_BETTERSAVE_DLL std::vector<TrashedLevel> getLevelsInTrash();
     HJFOD_BETTERSAVE_DLL bool isLevelTrashed(GJGameLevel* level);
 
@@ -45,10 +46,12 @@ namespace save {
         friend geode::Result<> moveLevelToTrash(GJGameLevel* level);
         friend geode::Result<> untrashLevel(GJGameLevel* level);
         friend geode::Result<> permanentlyDelete(GJGameLevel* level);
+        friend geode::Result<> clearTrash();
 
     public:
         ~TrashLevelEvent();
 
+        // Might be null if this is a permanent delete for all trash levels
         GJGameLevel* getLevel() const;
         bool isPermanentDelete() const;
         bool isTrash() const;
