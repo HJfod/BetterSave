@@ -1,15 +1,18 @@
 {
-	"geode": "1.3.5",
+	"gd": {
+		"win": "2.204"
+	},
+	"geode": "2.0.0-beta.25",
 	"version": "v1.0.0",
 	"id": "hjfod.bettersave",
 	"name": "BetterSave",
 	"developer": "HJfod",
-	"description": "Improves local level saving",
+	"description": "Saves created levels as individual files",
 	"dependencies": [
 		{
 			"id": "hjfod.gmd-api",
-			"version": "v1.0.0",
-			"required": true
+			"version": "v1.0.0"
 		}
-	]
+	],
+	"early-load": true
 }
