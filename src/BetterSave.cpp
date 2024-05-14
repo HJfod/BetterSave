@@ -11,6 +11,10 @@ using namespace save;
 ghc::filesystem::path save::getLevelsSaveDir() {
 	return dirs::getSaveDir() / "levels";
 }
+ghc::filesystem::path save::getCurrentLevelSaveDir(GJGameLevel* level) {
+    auto info = CategoryInfo::from(level);
+	return info ? info->getSaveDir() : ghc::filesystem::path();
+}
 
 Result<> save::trash(GJGameLevel* level) {
     return Trashcan::get()->add(level);

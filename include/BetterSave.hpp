@@ -12,6 +12,7 @@ namespace save {
     using geode::Result;
 
     HJFOD_BETTERSAVE_DLL ghc::filesystem::path getLevelsSaveDir();
+    HJFOD_BETTERSAVE_DLL ghc::filesystem::path getCurrentLevelSaveDir(GJGameLevel* level);
 
     namespace created {
         HJFOD_BETTERSAVE_DLL ghc::filesystem::path getCreatedLevelsDir();
