@@ -13,6 +13,5 @@
 			"id": "hjfod.gmd-api",
 			"version": "v1.0.0"
 		}
-	],
-	"early-load": true
+	]
 }

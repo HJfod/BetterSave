@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Geode/ui/Popup.hpp>
-#include "../include/LocalLevels.hpp"
+#include <BetterSave.hpp>
 
 using namespace geode::prelude;
 

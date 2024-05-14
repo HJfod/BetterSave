@@ -2,14 +2,14 @@
 #include <Geode/ui/ScrollLayer.hpp>
 #include <fmt/chrono.h>
 
-static std::string toAgoString(save::TrashTime const& time) {
+static std::string toAgoString(save::trashcan::TimePoint const& time) {
     auto const fmtPlural = [](auto count, auto unit) {
         if (count == 1) {
             return fmt::format("{} {} ago", count, unit);
         }
         return fmt::format("{} {}s ago", count, unit);
     };
-    auto now = save::TrashClock::now();
+    auto now = save::trashcan::Clock::now();
     auto len = std::chrono::duration_cast<std::chrono::minutes>(now - time).count();
     if (len < 60) {
         return fmtPlural(len, "minute");
@@ -63,10 +63,10 @@ bool TrashcanPopup::setup() {
 
 void TrashcanPopup::updateList() {
     m_scrollingLayer->m_contentLayer->removeAllChildren();
-    if (save::getLevelsInTrash().empty()) {
+    if (save::trashcan::getTrashedLevels().empty()) {
         this->onClose(nullptr);
     }
-    for (auto level : save::getLevelsInTrash()) {
+    for (auto level : save::trashcan::getTrashedLevels()) {
         auto node = CCNode::create();
         node->setContentSize({ m_scrollingLayer->getContentWidth(), 38 });
 
@@ -75,13 +75,13 @@ void TrashcanPopup::updateList() {
         separator->setOpacity(90);
         node->addChildAtPosition(separator, Anchor::Bottom);
 
-        auto title = CCLabelBMFont::create(level.getLevel()->m_levelName.c_str(), "bigFont.fnt");
+        auto title = CCLabelBMFont::create(level.level->m_levelName.c_str(), "bigFont.fnt");
         title->setScale(.5f);
         title->setAnchorPoint({ 0, .5f });
         node->addChildAtPosition(title, Anchor::Left, ccp(10, 8));
 
         auto objCount = CCLabelBMFont::create(
-            fmt::format("Trashed {}", toAgoString(level.getTrashTime())
+            fmt::format("Trashed {}", toAgoString(level.trashTime)
         ).c_str(), "goldFont.fnt");
         objCount->setScale(.4f);
         objCount->setAnchorPoint({ 0, .5f });
@@ -94,7 +94,7 @@ void TrashcanPopup::updateList() {
         auto restoreBtn = CCMenuItemSpriteExtra::create(
             restoreSpr, this, menu_selector(TrashcanPopup::onRestore)
         );
-        restoreBtn->setUserObject(level.getLevel());
+        restoreBtn->setUserObject(level.level);
         actionsMenu->addChild(restoreBtn);
 
         auto deleteSpr = CCSprite::createWithSpriteFrameName("GJ_trashBtn_001.png");
@@ -102,14 +102,14 @@ void TrashcanPopup::updateList() {
             deleteSpr, this, menu_selector(TrashcanPopup::onDelete)
         );
         deleteBtn->setLayoutOptions(AxisLayoutOptions::create()->setRelativeScale(.95f));
-        deleteBtn->setUserObject(level.getLevel());
+        deleteBtn->setUserObject(level.level);
         actionsMenu->addChild(deleteBtn);
 
         auto infoSpr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
         auto infoBtn = CCMenuItemSpriteExtra::create(
             infoSpr, this, menu_selector(TrashcanPopup::onInfo)
         );
-        infoBtn->setUserObject(level.getLevel());
+        infoBtn->setUserObject(level.level);
         actionsMenu->addChild(infoBtn);
 
         actionsMenu->setLayout(
@@ -171,7 +171,7 @@ void TrashcanPopup::onDelete(CCObject* sender) {
 }
 void TrashcanPopup::onRestore(CCObject* sender) {
     auto level = static_cast<GJGameLevel*>(static_cast<CCNode*>(sender)->getUserObject());
-    auto res = save::untrashLevel(level);
+    auto res = save::untrash(level);
     if (!res) {
         FLAlertLayer::create(
             "Failed to Restore",
@@ -188,7 +188,7 @@ void TrashcanPopup::onDeleteAll(CCObject*) {
         "Cancel", "Delete All",
         [](auto*, bool btn2) {
             if (btn2) {
-                auto res = save::clearTrash();
+                auto res = save::trashcan::clearTrash();
                 if (!res) {
                     FLAlertLayer::create(
                         "Failed to Clear",
