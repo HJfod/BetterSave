@@ -46,10 +46,10 @@ namespace save {
 
         TrashLevelEvent();
 
-        friend class Category;
-        friend class CategoryInfo;
-        friend class CreatedLevels;
-        friend class Trashcan;
+        friend class ::Category;
+        friend class ::CategoryInfo;
+        friend class ::CreatedLevels;
+        friend class ::Trashcan;
 
     public:
         ~TrashLevelEvent();
