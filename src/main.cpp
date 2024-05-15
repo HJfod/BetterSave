@@ -36,6 +36,7 @@ $on_mod(Loaded) {
 
 static bool IS_BACKING_UP = false;
 struct $modify(LocalLevelManager) {
+	$override
 	void encodeDataTo(DS_Dictionary* dict) {
 		// If the user is backing up, then run the function normally
 		if (IS_BACKING_UP) {
@@ -59,6 +60,7 @@ struct $modify(LocalLevelManager) {
 			CreatedLevels::get()->saveMetadata();
 		}
 	}
+	$override
 	void dataLoaded(DS_Dictionary* dict) {
 		LocalLevelManager::dataLoaded(dict);
 
@@ -67,6 +69,7 @@ struct $modify(LocalLevelManager) {
 	}
 };
 struct $modify(GJAccountManager) {
+	$override
 	bool backupAccount(gd::string idk) {
 		// For backup we need to temporarily allow saving CCLocalLevels normally
 		IS_BACKING_UP = true;
@@ -76,6 +79,7 @@ struct $modify(GJAccountManager) {
 	}
 };
 struct $modify(EditorPauseLayer) {
+	$override
 	void saveLevel() {
 		EditorPauseLayer::saveLevel();
         auto info = CategoryInfo::from(m_editorLayer->m_level, CreatedLevels::get());
@@ -88,6 +92,14 @@ struct $modify(EditorPauseLayer) {
 	}
 };
 struct $modify(GameLevelManager) {
+	$override
+	GJGameLevel* createNewLevel() {
+		// Categorize new created levels
+		auto level = GameLevelManager::createNewLevel();
+		CategoryInfo::from(level, CreatedLevels::get());
+		return level;
+	}
+	$override
 	void deleteLevel(GJGameLevel* level) {
 		if (level->m_levelType == GJLevelType::Editor) {
 			auto res = save::trash(level);
@@ -112,6 +124,7 @@ class $modify(TrashBrowserLayer, LevelBrowserLayer) {
         EventListener<EventFilter<save::TrashLevelEvent>> listener;
     };
 
+	$override
     bool init(GJSearchObject* search) {
         if (!LevelBrowserLayer::init(search))
             return false;
@@ -151,6 +164,7 @@ class $modify(TrashBrowserLayer, LevelBrowserLayer) {
 // Fix the popup messages claiming deletion is permanent
 
 class $modify(EditLevelLayer) {
+	$override
     void confirmDelete(CCObject*) {
         auto alert = FLAlertLayer::create(
             this,
@@ -166,6 +180,7 @@ class $modify(EditLevelLayer) {
     }
 };
 class $modify(LevelBrowserLayer) {
+	$override
     void onDeleteSelected(CCObject* sender) {
 		if (m_searchObject->m_searchType == SearchType::MyLevels) {
 			size_t count = 0;

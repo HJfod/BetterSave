@@ -250,7 +250,6 @@ void Category::loadLevels() {
             terminate("Unable to categorize '{}'", id);
         }
 
-		level->setID(id);
         this->onLoad(levelDir, level);
 
 		log::debug("Loaded '{}'", id);
