@@ -16,6 +16,7 @@ namespace save {
 
     namespace created {
         HJFOD_BETTERSAVE_DLL ghc::filesystem::path getCreatedLevelsDir();
+        HJFOD_BETTERSAVE_DLL Result<> saveLevel(GJGameLevel* level);
     }
 
     namespace trashcan {

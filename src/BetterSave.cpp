@@ -62,3 +62,10 @@ void trashcan::openTrashcanPopup() {
 ghc::filesystem::path created::getCreatedLevelsDir() {
     return CreatedLevels::get()->getPath();
 }
+Result<> created::saveLevel(GJGameLevel* level) {
+	auto info = CategoryInfo::from(level);
+	if (!info) {
+		return Err("Level is not part of the BetterSave category system");
+	}
+	return info->saveLevel();
+}
