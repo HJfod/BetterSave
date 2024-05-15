@@ -7,5 +7,5 @@
         #define HJFOD_BETTERSAVE_DLL __declspec(dllimport)
     #endif
 #else
-    #define HJFOD_BETTERSAVE_DLL
+    #define HJFOD_BETTERSAVE_DLL __attribute__((visibility("default")))
 #endif
