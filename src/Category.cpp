@@ -108,7 +108,7 @@ bool GmdExportable::operator==(GmdExportable const& other) const {
                 (list->getID() == other->getID()) ||
                 (
 					list->m_listName == other->m_listName &&
-					list->m_levels == other->m_levels
+					std::vector(list->m_levels) == std::vector(other->m_levels)
                 );
         },
         [&](auto, auto) {

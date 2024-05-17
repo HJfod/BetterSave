@@ -60,11 +60,11 @@ ghc::filesystem::path trashcan::getTrashDir() {
 }
 bool trashcan::isTrashed(GJGameLevel* level) {
 	auto gmd = GmdExportable::from(level);
-    return gmd ? CategoryInfo::from(*gmd, Trashcan::get()) : false;
+    return gmd ? CategoryInfo::from(*gmd, Trashcan::get()) : nullptr;
 }
 bool trashcan::isTrashed(GJLevelList* list) {
 	auto gmd = GmdExportable::from(list);
-    return gmd ? CategoryInfo::from(*gmd, Trashcan::get()) : false;
+    return gmd ? CategoryInfo::from(*gmd, Trashcan::get()) : nullptr;
 }
 std::vector<trashcan::TrashedLevel> trashcan::getTrashedLevels() {
     return Trashcan::get()->getAllLevels();
