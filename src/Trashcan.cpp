@@ -10,10 +10,16 @@ Trashcan* Trashcan::get() {
     return inst;
 }
 
+ghc::filesystem::path Trashcan::getLevelsPath() const {
+    return this->getPath();
+}
+ghc::filesystem::path Trashcan::getListsPath() const {
+    return this->getPath();
+}
 ghc::filesystem::path Trashcan::getPath() const {
     return save::getLevelsSaveDir() / "trashcan";
 }
-void Trashcan::onLoad(ghc::filesystem::path const& dir, GJGameLevel* level) {
+void Trashcan::onLoad(ghc::filesystem::path const& dir, GmdExportable level) {
     auto timeBin = file::readBinary(dir / ".trashtime").unwrapOr(timeToBytes(trashcan::Clock::now()));
     trashcan::Unit dur(*reinterpret_cast<trashcan::Unit::rep*>(timeBin.data()));
     m_levels.push_back(Level {
@@ -21,7 +27,7 @@ void Trashcan::onLoad(ghc::filesystem::path const& dir, GJGameLevel* level) {
         .trashTime = trashcan::TimePoint(dur)
     });
 }
-void Trashcan::onAdd(GJGameLevel* level, bool isNew) {
+void Trashcan::onAdd(GmdExportable level, bool isNew) {
 	// Save the trashing time
 	auto time = trashcan::Clock::now();
 	(void)file::writeBinary(CategoryInfo::from(level)->getSaveDir() / ".trashtime", timeToBytes(time));
@@ -37,10 +43,34 @@ void Trashcan::onAdd(GJGameLevel* level, bool isNew) {
         ev.post();
     }
 }
-void Trashcan::onRemove(GJGameLevel* level) {
+void Trashcan::onRemove(GmdExportable level) {
 	ranges::remove(m_levels, [&](auto trashed) { return trashed.level == level; });
 }
-std::vector<Trashcan::Level> Trashcan::getAllLevels() const {
+std::vector<trashcan::TrashedLevel> Trashcan::getAllLevels() const {
+    std::vector<trashcan::TrashedLevel> res;
+    for (auto& level : m_levels) {
+        if (auto lvl = level.level.asLevel()) {
+            res.push_back(trashcan::TrashedLevel {
+                .level = lvl,
+                .trashTime = level.trashTime,
+            });
+        }
+    }
+    return res;
+}
+std::vector<trashcan::TrashedList> Trashcan::getAllLists() const {
+    std::vector<trashcan::TrashedList> res;
+    for (auto& level : m_levels) {
+        if (auto lvl = level.level.asList()) {
+            res.push_back(trashcan::TrashedList {
+                .list = lvl,
+                .trashTime = level.trashTime,
+            });
+        }
+    }
+    return res;
+}
+std::vector<Trashcan::Level> Trashcan::getAll() const {
     return m_levels;
 }
 
@@ -57,7 +87,7 @@ Result<> Trashcan::clear() {
     m_levels.clear();
 
 	auto ev = TrashLevelEvent();
-	ev.m_impl->level = nullptr;
+	ev.m_impl->level = GmdExportable();
 	ev.m_impl->mode = TrashLevelEvent::Impl::Delete;
 	ev.post();
 

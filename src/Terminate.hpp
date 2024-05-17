@@ -22,3 +22,10 @@ void terminate(std::string const& reason, Args&&... args) {
     if (GEODE_CONCAT(assert_res_, __LINE__).isErr()) { \
         terminate(msg " failed due to \"{}\"", std::move(GEODE_CONCAT(assert_res_, __LINE__).unwrapErr())); \
     }
+
+#define ASSERT_OR_TERMINATE_INTO(var, msg, ...) \
+    auto GEODE_CONCAT(assert_res_, __LINE__) = (__VA_ARGS__); \
+    if (GEODE_CONCAT(assert_res_, __LINE__).isErr()) { \
+        terminate(msg " failed due to \"{}\"", std::move(GEODE_CONCAT(assert_res_, __LINE__).unwrapErr())); \
+    }\
+    var = std::move(GEODE_CONCAT(assert_res_, __LINE__)).unwrap();

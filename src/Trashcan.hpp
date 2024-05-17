@@ -8,24 +8,29 @@ using namespace save;
 
 class Trashcan : public Category {
 public:
-    // If the impl ever gains more fields, replace this def instead of modifying 
-    // the public API!
-    using Level = trashcan::TrashedLevel;
+    struct Level final {
+        GmdExportable level;
+        trashcan::TimePoint trashTime;
+    };
 
 protected:
     std::vector<Level> m_levels;
 
     friend class Trash;
 
-    void onLoad(ghc::filesystem::path const& dir, GJGameLevel* level) override;
-    void onAdd(GJGameLevel* level, bool isNew) override;
-    void onRemove(GJGameLevel* level) override;
+    void onLoad(ghc::filesystem::path const& dir, GmdExportable level) override;
+    void onAdd(GmdExportable level, bool isNew) override;
+    void onRemove(GmdExportable level) override;
 
 public:
     static Trashcan* get();
 
-    ghc::filesystem::path getPath() const override;
-    std::vector<Level> getAllLevels() const;
+    ghc::filesystem::path getPath() const;
+    ghc::filesystem::path getLevelsPath() const override;
+    ghc::filesystem::path getListsPath() const override;
+    std::vector<trashcan::TrashedLevel> getAllLevels() const;
+    std::vector<trashcan::TrashedList> getAllLists() const;
+    std::vector<Level> getAll() const;
     
     Result<> clear();
 };

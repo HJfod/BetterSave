@@ -1,6 +1,7 @@
 #include "TrashcanPopup.hpp"
 #include <Geode/ui/ScrollLayer.hpp>
 #include <fmt/chrono.h>
+#include "Trashcan.hpp"
 
 static std::string toAgoString(save::trashcan::TimePoint const& time) {
     auto const fmtPlural = [](auto count, auto unit) {
@@ -66,7 +67,7 @@ void TrashcanPopup::updateList() {
     if (save::trashcan::getTrashedLevels().empty()) {
         this->onClose(nullptr);
     }
-    for (auto level : save::trashcan::getTrashedLevels()) {
+    for (auto gmd : Trashcan::get()->getAll()) {
         auto node = CCNode::create();
         node->setContentSize({ m_scrollingLayer->getContentWidth(), 38 });
 
@@ -75,14 +76,15 @@ void TrashcanPopup::updateList() {
         separator->setOpacity(90);
         node->addChildAtPosition(separator, Anchor::Bottom);
 
-        auto title = CCLabelBMFont::create(level.level->m_levelName.c_str(), "bigFont.fnt");
+        auto title = CCLabelBMFont::create(gmd.level.getName().c_str(), "bigFont.fnt");
         title->setScale(.5f);
         title->setAnchorPoint({ 0, .5f });
+        if (gmd.level.asList()) {
+            title->setColor({ 0, 255, 0 });
+        }
         node->addChildAtPosition(title, Anchor::Left, ccp(10, 8));
 
-        auto objCount = CCLabelBMFont::create(
-            fmt::format("Trashed {}", toAgoString(level.trashTime)
-        ).c_str(), "goldFont.fnt");
+        auto objCount = CCLabelBMFont::create(fmt::format("Trashed {}", toAgoString(gmd.trashTime)).c_str(), "goldFont.fnt");
         objCount->setScale(.4f);
         objCount->setAnchorPoint({ 0, .5f });
         node->addChildAtPosition(objCount, Anchor::Left, ccp(10, -8));
@@ -94,7 +96,14 @@ void TrashcanPopup::updateList() {
         auto restoreBtn = CCMenuItemSpriteExtra::create(
             restoreSpr, this, menu_selector(TrashcanPopup::onRestore)
         );
-        restoreBtn->setUserObject(level.level);
+        gmd.level.visit(makeVisitor {
+            [&](Ref<GJGameLevel> level) {
+                restoreBtn->setUserObject(level);
+            },
+            [&](Ref<GJLevelList> list) {
+                restoreBtn->setUserObject(list);
+            },
+        });
         actionsMenu->addChild(restoreBtn);
 
         auto deleteSpr = CCSprite::createWithSpriteFrameName("GJ_trashBtn_001.png");
@@ -102,14 +111,28 @@ void TrashcanPopup::updateList() {
             deleteSpr, this, menu_selector(TrashcanPopup::onDelete)
         );
         deleteBtn->setLayoutOptions(AxisLayoutOptions::create()->setRelativeScale(.95f));
-        deleteBtn->setUserObject(level.level);
+        gmd.level.visit(makeVisitor {
+            [&](Ref<GJGameLevel> level) {
+                deleteBtn->setUserObject(level);
+            },
+            [&](Ref<GJLevelList> list) {
+                deleteBtn->setUserObject(list);
+            },
+        });
         actionsMenu->addChild(deleteBtn);
 
         auto infoSpr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
         auto infoBtn = CCMenuItemSpriteExtra::create(
             infoSpr, this, menu_selector(TrashcanPopup::onInfo)
         );
-        infoBtn->setUserObject(level.level);
+        gmd.level.visit(makeVisitor {
+            [&](Ref<GJGameLevel> level) {
+                infoBtn->setUserObject(level);
+            },
+            [&](Ref<GJLevelList> list) {
+                infoBtn->setUserObject(list);
+            },
+        });
         actionsMenu->addChild(infoBtn);
 
         actionsMenu->setLayout(
@@ -131,51 +154,121 @@ void TrashcanPopup::updateList() {
 }
 
 void TrashcanPopup::onInfo(CCObject* sender) {
-    auto level = static_cast<GJGameLevel*>(static_cast<CCNode*>(sender)->getUserObject());
-    FLAlertLayer::create(
-        "Level Info",
-        fmt::format(
-            "<cb>Objects</c>: {}\n"
-            "<co>Length</c>: {}\n"
-            "<cp>Time in Editor</c>: {}\n",
-            level->m_objectCount.value(),
-            level->lengthKeyToString(level->m_levelLength),
-            level->m_workingTime
-        ),
-        "OK"
-    )->show();
+    auto obj = static_cast<CCNode*>(sender)->getUserObject();
+    if (auto level = typeinfo_cast<GJGameLevel*>(obj)) {
+        FLAlertLayer::create(
+            "Level Info",
+            fmt::format(
+                "<cb>Objects</c>: {}\n"
+                "<co>Length</c>: {}\n"
+                "<cp>Time in Editor</c>: {}\n",
+                level->m_objectCount.value(),
+                level->lengthKeyToString(level->m_levelLength),
+                level->m_workingTime
+            ),
+            "OK"
+        )->show();
+    }
+    else if (auto list = typeinfo_cast<GJLevelList*>(obj)) {
+        FLAlertLayer::create(
+            "List Info",
+            fmt::format(
+                "<cb>Levels</c>: {}\n",
+                list->m_levels.size()
+            ),
+            "OK"
+        )->show();
+    }
+    else {
+        FLAlertLayer::create(
+            "ERROR",
+            "<cr>INTERNAL ERROR: UNHANDLED GmdExportable TYPE!</c> <co>REPORT THIS BUG TO HJFOD!</c>",
+            "OK"
+        )->show();
+    }
 }
 void TrashcanPopup::onDelete(CCObject* sender) {
-    auto level = static_cast<GJGameLevel*>(static_cast<CCNode*>(sender)->getUserObject());
-    createQuickPopup(
-        "Permanently Delete",
-        fmt::format(
-            "Are you sure you want to <cr>permanently delete</c> <cy>{}</c>?\n"
-            "<cr>This can NOT be undone!</c>",
-            level->m_levelName
-        ),
-        "Cancel", "Delete",
-        [level = Ref(level)](auto*, bool btn2) {
-            if (btn2) {
-                auto res = save::permanentlyDelete(level);
-                if (!res) {
-                    FLAlertLayer::create(
-                        "Failed to Delete",
-                        fmt::format("Failed to permanently delete <cy>{}</c>: {}", level->m_levelName, res.unwrapErr()),
-                        "OK"
-                    )->show();
+    auto obj = static_cast<CCNode*>(sender)->getUserObject();
+    if (auto level = typeinfo_cast<GJGameLevel*>(obj)) {
+        createQuickPopup(
+            "Permanently Delete",
+            fmt::format(
+                "Are you sure you want to <cr>permanently delete</c> <cy>{}</c>?\n"
+                "<cr>This can NOT be undone!</c>",
+                level->m_levelName
+            ),
+            "Cancel", "Delete",
+            [level = Ref(level)](auto*, bool btn2) {
+                if (btn2) {
+                    auto res = save::permanentlyDelete(level);
+                    if (!res) {
+                        FLAlertLayer::create(
+                            "Failed to Delete",
+                            fmt::format("Failed to permanently delete <cy>{}</c>: {}", level->m_levelName, res.unwrapErr()),
+                            "OK"
+                        )->show();
+                    }
                 }
             }
-        }
-    );
+        );
+    }
+    else if (auto list = typeinfo_cast<GJLevelList*>(obj)) {
+        createQuickPopup(
+            "Permanently Delete",
+            fmt::format(
+                "Are you sure you want to <cr>permanently delete</c> <cy>{}</c>?\n"
+                "<cr>This can NOT be undone!</c>",
+                list->m_listName
+            ),
+            "Cancel", "Delete",
+            [list = Ref(list)](auto*, bool btn2) {
+                if (btn2) {
+                    auto res = save::permanentlyDelete(list);
+                    if (!res) {
+                        FLAlertLayer::create(
+                            "Failed to Delete",
+                            fmt::format("Failed to permanently delete <cy>{}</c>: {}", list->m_listName, res.unwrapErr()),
+                            "OK"
+                        )->show();
+                    }
+                }
+            }
+        );
+    }
+    else {
+        FLAlertLayer::create(
+            "ERROR",
+            "<cr>INTERNAL ERROR: UNHANDLED GmdExportable TYPE!</c> <co>REPORT THIS BUG TO HJFOD!</c>",
+            "OK"
+        )->show();
+    }
 }
 void TrashcanPopup::onRestore(CCObject* sender) {
-    auto level = static_cast<GJGameLevel*>(static_cast<CCNode*>(sender)->getUserObject());
-    auto res = save::untrash(level);
-    if (!res) {
+    auto obj = static_cast<CCNode*>(sender)->getUserObject();
+    if (auto level = typeinfo_cast<GJGameLevel*>(obj)) {
+        auto res = save::untrash(level);
+        if (!res) {
+            FLAlertLayer::create(
+                "Failed to Restore",
+                fmt::format("Failed to restore <cy>{}</c>: {}", level->m_levelName, res.unwrapErr()),
+                "OK"
+            )->show();
+        }
+    }
+    else if (auto list = typeinfo_cast<GJLevelList*>(obj)) {
+        auto res = save::untrash(list);
+        if (!res) {
+            FLAlertLayer::create(
+                "Failed to Restore",
+                fmt::format("Failed to restore <cy>{}</c>: {}", list->m_listName, res.unwrapErr()),
+                "OK"
+            )->show();
+        }
+    }
+    else {
         FLAlertLayer::create(
-            "Failed to Restore",
-            fmt::format("Failed to restore <cy>{}</c>: {}", level->m_levelName, res.unwrapErr()),
+            "ERROR",
+            "<cr>INTERNAL ERROR: UNHANDLED GmdExportable TYPE!</c> <co>REPORT THIS BUG TO HJFOD!</c>",
             "OK"
         )->show();
     }

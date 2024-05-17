@@ -18,8 +18,11 @@ $on_mod(Loaded) {
 	log::debug("Loading levels");
 
 	// If some levels have already been loaded through LocalLevelManager, run migrations
-	bool shouldMigrate = LocalLevelManager::get()->m_localLevels->count();
-
+	bool shouldMigrate = LocalLevelManager::get()->m_localLevels->count() ||
+		LocalLevelManager::get()->m_localLists->count();
+	
+	bool shouldRecover = getExistingBetterSaveVersion() < VersionInfo(1, 2, 0);
+	
 	// Load normal levels first, trashcan afterwards (in case of ID conflicts)
 	CreatedLevels::get()->loadLevels();
 	Trashcan::get()->loadLevels();
@@ -28,6 +31,14 @@ $on_mod(Loaded) {
 	if (shouldMigrate) {
 		CreatedLevels::get()->migrate();
 	}
+	// Versions before v1.2.0 didn't handle lists
+	if (shouldRecover) {
+		CreatedLevels::get()->recoverLists();
+	}
+
+	// Store the current BetterSave version
+	auto path = save::getLevelsSaveDir() / ".version";
+	(void)file::writeString(path, getCurrentBetterSaveVersion().toString());
 
 	log::debug("Loading done");
 }
@@ -57,7 +68,17 @@ struct $modify(LocalLevelManager) {
 		// Otherwise levels are saved individually in EditorPauseLayer::saveLevel
 		else {
 			// Save the level order here though, since filesystem is alphabetically sorted
-			CreatedLevels::get()->saveMetadata();
+			CreatedLevels::get()->saveLevelsMetadata();
+			CreatedLevels::get()->saveListsMetadata();
+
+			// Save lists here because there's no single function for explicitly saving them 
+			// unlike levels with saveLevel() :V
+			for (auto list : CreatedLevels::get()->getAllLists()) {
+				auto res = CategoryInfo::from(GmdExportable::assertFrom(list))->save();
+				if (!res) {
+					log::error("Unable to save list '{}': {}", list->m_listName, res.unwrapErr());
+				}
+			}
 		}
 	}
 	$override
@@ -82,9 +103,9 @@ struct $modify(EditorPauseLayer) {
 	$override
 	void saveLevel() {
 		EditorPauseLayer::saveLevel();
-        auto info = CategoryInfo::from(m_editorLayer->m_level, CreatedLevels::get());
+        auto info = CategoryInfo::from(GmdExportable::assertFrom(m_editorLayer->m_level), CreatedLevels::get());
         if (info) {
-			auto res = info->saveLevel();
+			auto res = info->save();
 			if (!res) {
             	log::error("Unable to save level: {}", res.unwrapErr());
 			}
@@ -96,8 +117,23 @@ struct $modify(GameLevelManager) {
 	GJGameLevel* createNewLevel() {
 		// Categorize new created levels
 		auto level = GameLevelManager::createNewLevel();
-		CategoryInfo::from(level, CreatedLevels::get());
+		// This is extremely silly but what it does is make sure the created 
+		// level object has been fully initialized before categorizing it
+		Loader::get()->queueInMainThread([=] {
+			CategoryInfo::from(GmdExportable::assertFrom(level), CreatedLevels::get());
+		});
 		return level;
+	}
+	$override
+	GJLevelList* createNewLevelList() {
+		// Categorize new created lists
+		auto list = GameLevelManager::createNewLevelList();
+		// This is extremely silly but what it does is make sure the created 
+		// list object has been fully initialized before categorizing it
+		Loader::get()->queueInMainThread([=] {
+			CategoryInfo::from(GmdExportable::assertFrom(list), CreatedLevels::get());
+		});
+		return list;
 	}
 	$override
 	void deleteLevel(GJGameLevel* level) {
@@ -114,6 +150,22 @@ struct $modify(GameLevelManager) {
 			return;
 		}
 		GameLevelManager::deleteLevel(level);
+	}
+	$override
+	void deleteLevelList(GJLevelList* list) {
+		if (list->m_listType == 2) {
+			auto res = save::trash(list);
+			if (!res) {
+				log::error("Unable to move list to trash: {} - refusing to delete", res.unwrapErr());
+				FLAlertLayer::create(
+					"Error Trashing List",
+					fmt::format("Unable to move list to trash: {}", res.unwrapErr()),
+					"OK"
+				)->show();
+			}
+			return;
+		}
+		GameLevelManager::deleteLevelList(list);
 	}
 };
 

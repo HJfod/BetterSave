@@ -4,7 +4,10 @@ TrashLevelEvent::TrashLevelEvent() : m_impl(std::make_unique<TrashLevelEvent::Im
 TrashLevelEvent::~TrashLevelEvent() {}
 
 GJGameLevel* TrashLevelEvent::getLevel() const {
-	return m_impl->level;
+	return m_impl->level.asLevel();
+}
+GJLevelList* TrashLevelEvent::getList() const {
+	return m_impl->level.asList();
 }
 bool TrashLevelEvent::isPermanentDelete() const {
 	return m_impl->mode == Impl::Delete;
