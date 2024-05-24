@@ -18,8 +18,6 @@ private:
 public:
     GmdExportable() = default;
 
-    static GmdExportable assertFrom(GJGameLevel* level);
-    static GmdExportable assertFrom(GJLevelList* list);
     static Result<GmdExportable> from(GJGameLevel* level);
     static Result<GmdExportable> from(GJLevelList* list);
     static Result<GmdExportable> importFrom(ghc::filesystem::path const& dir);

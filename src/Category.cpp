@@ -50,14 +50,6 @@ static void checkReservedFilenames(std::string& name) {
     }
 }
 
-GmdExportable GmdExportable::assertFrom(GJGameLevel* level) {
-    ASSERT_OR_TERMINATE_INTO(auto res, "Creating GmdExportable from level", GmdExportable::from(level));
-    return res;
-}
-GmdExportable GmdExportable::assertFrom(GJLevelList* list) {
-    ASSERT_OR_TERMINATE_INTO(auto res, "Creating GmdExportable from list", GmdExportable::from(list));
-    return res;
-}
 Result<GmdExportable> GmdExportable::from(GJGameLevel* level) {
     if (level->m_levelType != GJLevelType::Editor) {
         return Err("Attempted to introduce a non-editor level to the BetterSave category system");

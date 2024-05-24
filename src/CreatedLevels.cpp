@@ -140,10 +140,16 @@ std::vector<Ref<GJLevelList>> CreatedLevels::getAllLists() const {
 std::vector<GmdExportable> CreatedLevels::getAll() const {
 	std::vector<GmdExportable> res;
 	for (auto level : CCArrayExt<GJGameLevel*>(LocalLevelManager::get()->m_localLevels)) {
-		res.push_back(GmdExportable::assertFrom(level));
+		// Some mods may introduce non-editor levels to localLevels - ignore them!
+		if (auto exportable = GmdExportable::from(level)) {
+			res.push_back(*exportable);
+		}
 	}
 	for (auto list : CCArrayExt<GJLevelList*>(LocalLevelManager::get()->m_localLists)) {
-		res.push_back(GmdExportable::assertFrom(list));
+		// Some mods may introduce non-editor lists to localLevels - ignore them!
+		if (auto exportable = GmdExportable::from(list)) {
+			res.push_back(*exportable);
+		}
 	}
     return res;
 }

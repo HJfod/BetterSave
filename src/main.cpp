@@ -10,6 +10,7 @@
 #include "Category.hpp"
 #include "CreatedLevels.hpp"
 #include "Trashcan.hpp"
+#include "Terminate.hpp"
 
 using namespace geode::prelude;
 using namespace save;
@@ -74,9 +75,18 @@ struct $modify(LocalLevelManager) {
 			// Save lists here because there's no single function for explicitly saving them 
 			// unlike levels with saveLevel() :V
 			for (auto list : CreatedLevels::get()->getAllLists()) {
-				auto res = CategoryInfo::from(GmdExportable::assertFrom(list))->save();
-				if (!res) {
-					log::error("Unable to save list '{}': {}", list->m_listName, res.unwrapErr());
+				auto exp = GmdExportable::from(list);
+				if (exp) {
+					auto res = CategoryInfo::from(*exp)->save();
+					if (!res) {
+						log::error("Unable to save list '{}': {}", list->m_listName, res.unwrapErr());
+					}
+				}
+				else {
+					log::error(
+						"Unable to save list '{}' due to it not being exportable: {}",
+						list->m_listName, exp.unwrapErr()
+					);
 				}
 			}
 		}
@@ -103,13 +113,17 @@ struct $modify(EditorPauseLayer) {
 	$override
 	void saveLevel() {
 		EditorPauseLayer::saveLevel();
-        auto info = CategoryInfo::from(GmdExportable::assertFrom(m_editorLayer->m_level), CreatedLevels::get());
-        if (info) {
-			auto res = info->save();
-			if (!res) {
-            	log::error("Unable to save level: {}", res.unwrapErr());
+
+		// If the level is not an editor level, ignore it
+		if (auto exportable = GmdExportable::from(m_editorLayer->m_level)) {
+			auto info = CategoryInfo::from(*exportable, CreatedLevels::get());
+			if (info) {
+				auto res = info->save();
+				if (!res) {
+					log::error("Unable to save level: {}", res.unwrapErr());
+				}
 			}
-        }
+		}
 	}
 };
 struct $modify(GameLevelManager) {
@@ -120,7 +134,8 @@ struct $modify(GameLevelManager) {
 		// This is extremely silly but what it does is make sure the created 
 		// level object has been fully initialized before categorizing it
 		Loader::get()->queueInMainThread([=] {
-			CategoryInfo::from(GmdExportable::assertFrom(level), CreatedLevels::get());
+    		ASSERT_OR_TERMINATE_INTO(auto res, "Creating GmdExportable from newly created level", GmdExportable::from(level));
+			CategoryInfo::from(res, CreatedLevels::get());
 		});
 		return level;
 	}
@@ -131,7 +146,8 @@ struct $modify(GameLevelManager) {
 		// This is extremely silly but what it does is make sure the created 
 		// list object has been fully initialized before categorizing it
 		Loader::get()->queueInMainThread([=] {
-			CategoryInfo::from(GmdExportable::assertFrom(list), CreatedLevels::get());
+    		ASSERT_OR_TERMINATE_INTO(auto res, "Creating GmdExportable from newly created list", GmdExportable::from(list));
+			CategoryInfo::from(res, CreatedLevels::get());
 		});
 		return list;
 	}
