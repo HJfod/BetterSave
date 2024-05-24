@@ -232,6 +232,41 @@ class $modify(TrashBrowserLayer, LevelBrowserLayer) {
 // Fix the popup messages claiming deletion is permanent
 
 class $modify(EditLevelLayer) {
+	struct Fields {
+		bool levelInfoEdited = false;
+	};
+
+	$override
+	virtual void textChanged(CCTextInputNode* input) {
+		EditLevelLayer::textChanged(input);
+		m_fields->levelInfoEdited = true;
+	}
+	$override
+	void onSetFolder(CCObject* sender) {
+		EditLevelLayer::onSetFolder(sender);
+		m_fields->levelInfoEdited = true;
+	}
+	$override
+	void onShare(CCObject* sender) {
+		EditLevelLayer::onShare(sender);
+		m_fields->levelInfoEdited = true;
+	}
+	$override
+	void destructor() {
+		if (m_fields->levelInfoEdited) {
+			// If the level is not an editor level, ignore it
+			if (auto exportable = GmdExportable::from(m_level)) {
+				if (auto info = CategoryInfo::from(*exportable, CreatedLevels::get())) {
+					auto res = info->save();
+					if (!res) {
+						log::error("Unable to save level: {}", res.unwrapErr());
+					}
+				}
+			}
+		}
+		EditLevelLayer::~EditLevelLayer();
+	}
+
 	$override
     void confirmDelete(CCObject*) {
         auto alert = FLAlertLayer::create(
