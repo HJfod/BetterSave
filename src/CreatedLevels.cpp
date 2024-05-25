@@ -160,12 +160,15 @@ void CreatedLevels::migrate() {
 	// Make a backup of CCLocalLevels just in case
 	(void)file::createDirectoryAll(save::getLevelsSaveDir() / ".ccbackup");
 
+	auto ccName  = ghc::filesystem::path(std::string(LocalLevelManager::get()->m_fileName));
+	auto ccName2 = ghc::filesystem::path(ccName.stem().string() + "2" + ccName.extension().string());
+
 	// Check if CCLocalLevels has any data; if it's empty (or the size of an empty plist file), 
 	// then we don't need to back it up
 	std::error_code ec;
-	if (ghc::filesystem::file_size(dirs::getSaveDir() / "CCLocalLevels.dat", ec) > 96) {
+	if (ghc::filesystem::file_size(dirs::getSaveDir() / ccName, ec) > 96) {
 		ghc::filesystem::copy_file(
-			dirs::getSaveDir() / "CCLocalLevels.dat",
+			dirs::getSaveDir() / ccName,
 			save::getLevelsSaveDir() / ".ccbackup" / fmt::format("{}.dat", currentTimeAsString()),
 			ec
 		);
@@ -225,8 +228,8 @@ void CreatedLevels::migrate() {
 	// NOTE: there was a bug here if the game crashes / is deliberately force-closed 
 	// that causes levels to be duplicated (since CCLocalLevels is never cleared)
 	// This prevents that by DELETING CCLOCALLEVELS (!!!)
-	(void)file::writeBinary(dirs::getSaveDir() / "CCLocalLevels.dat", {});
-	(void)file::writeBinary(dirs::getSaveDir() / "CCLocalLevels2.dat", {});
+	(void)file::writeBinary(dirs::getSaveDir() / ccName, {});
+	(void)file::writeBinary(dirs::getSaveDir() / ccName2, {});
 
 	// Save metadata here already in case the game crashes or some shit
 	if (migratedLevelsCount > 0) {
