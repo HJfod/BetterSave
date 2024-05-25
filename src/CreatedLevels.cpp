@@ -162,8 +162,8 @@ void CreatedLevels::migrate() {
 
 	// Check if CCLocalLevels has any data; if it's empty (or the size of an empty plist file), 
 	// then we don't need to back it up
-	if (ghc::filesystem::file_size(dirs::getSaveDir() / "CCLocalLevels.dat") > 96) {
-		std::error_code ec;
+	std::error_code ec;
+	if (ghc::filesystem::file_size(dirs::getSaveDir() / "CCLocalLevels.dat", ec) > 96) {
 		ghc::filesystem::copy_file(
 			dirs::getSaveDir() / "CCLocalLevels.dat",
 			save::getLevelsSaveDir() / ".ccbackup" / fmt::format("{}.dat", currentTimeAsString()),
