@@ -7,10 +7,12 @@
 #include <Geode/modify/GJGameLevel.hpp>
 #include <Geode/modify/EditLevelLayer.hpp>
 #include <Geode/modify/LevelBrowserLayer.hpp>
+#include <Geode/modify/MenuLayer.hpp>
 #include "Category.hpp"
 #include "CreatedLevels.hpp"
 #include "Trashcan.hpp"
 #include "Terminate.hpp"
+#include "UpdatePSALayer.hpp"
 
 using namespace geode::prelude;
 using namespace save;
@@ -60,6 +62,8 @@ struct $modify(LocalLevelManager) {
 		// If the mod is being disabled or uninstalled, save normally to CCLocalLevels
 		auto action = Mod::get()->getRequestedAction();
 		if (
+			// todo: remove this after 2.206 - for now just always save!
+			true ||
 			action == ModRequestedAction::Disable || 
 			action == ModRequestedAction::Uninstall || 
 			action == ModRequestedAction::UninstallWithSaveData
@@ -317,3 +321,37 @@ class $modify(LevelBrowserLayer) {
 		}
     }
 };
+
+// Update warning
+
+// class $modify(PSALayer, MenuLayer) {
+// 	$override
+// 	bool init() {
+// 		if (!MenuLayer::init())
+// 			return false;
+
+// 		auto menu = CCMenu::create();
+// 		menu->ignoreAnchorPointForPosition(false);
+// 		menu->setContentSize({ 100, 80 });
+
+// 		auto spr = CCSprite::createWithSpriteFrameName("PSAButton.png"_spr);
+// 		auto btn = CCMenuItemSpriteExtra::create(
+// 			spr, this, menu_selector(PSALayer::onPSA)
+// 		);
+// 		menu->addChildAtPosition(btn, Anchor::Center);
+
+// 		if (!Mod::get()->setSavedValue("read-psa", true)) {
+// 			this->addChildAtPosition(menu, Anchor::Center, ccp(0, -70), false);
+// 		}
+// 		else {
+// 			menu->setScale(.5f);
+// 			this->addChildAtPosition(menu, Anchor::TopLeft, ccp(20, -70), false);
+// 		}
+
+// 		return true;
+// 	}
+
+// 	void onPSA(CCObject*) {
+// 		switchToScene(UpdatePSALayer::create());
+// 	}
+// };
