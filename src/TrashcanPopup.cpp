@@ -22,7 +22,8 @@ static std::string toAgoString(Trashed::TimePoint const& time) {
     if (len < 31) {
         return fmtPlural(len, "day");
     }
-    return fmt::format("{:%b %d %Y}", std::chrono::clock_cast<std::chrono::system_clock>(time));
+    return "(todo)";
+    // return fmt::format("{:%b %d %Y}", std::chrono::clock_cast<std::chrono::system_clock>(time));
 }
 
 bool TrashcanPopup::setup() {
