@@ -123,7 +123,7 @@ struct $modify(GameLevelManager) {
 	}
 	$override
 	void deleteLevelList(GJLevelList* list) {
-		if (list->m_listType == 2) {
+		if (list->m_listType == GJLevelType::Editor) {
 			auto res = Trashed::trash(list);
 			if (!res) {
 				FLAlertLayer::create(
