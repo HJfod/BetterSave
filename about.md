@@ -1,6 +1,6 @@
 # <cy>BetterSave</c>
 
-Improves saving speed in the editor & avoids data loss by temporarily saving editor levels into a separate file.
+No longer does anything related to saving except for the trashcan system. Will have backups in the future.
 
 ## <cg>No longer deletes levels!</c>
 

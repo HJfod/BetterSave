@@ -1,5 +1,5 @@
 {
-	"geode": "3.1.0",
+	"geode": "3.1.1",
 	"gd": {
 		"win": "2.206",
 		"android": "2.206",
@@ -8,7 +8,7 @@
 	},
 	"id": "hjfod.bettersave",
 	"name": "BetterSave",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"developer": "HJfod",
 	"description": "Improves saving speed in the editor",
 	"dependencies": [

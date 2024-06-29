@@ -47,38 +47,38 @@ static std::vector<std::string> recoverCrashedLevels() {
 	return recovered;
 }
 
-static bool SKIP_SAVING_LLM = false;
-class $modify(GManager) {
-	$override
-	void save() {
-		if (static_cast<LocalLevelManager*>(static_cast<GManager*>(this)) == LocalLevelManager::get()) {
-			if (SKIP_SAVING_LLM) return;
-			GManager::save();
+// static bool SKIP_SAVING_LLM = false;
+// class $modify(GManager) {
+// 	$override
+// 	void save() {
+// 		if (static_cast<LocalLevelManager*>(static_cast<GManager*>(this)) == LocalLevelManager::get()) {
+// 			if (SKIP_SAVING_LLM) return;
+// 			GManager::save();
 
-			// If saving local levels succeeded, delete temp dir
-			std::error_code ec;
-			std::filesystem::remove_all(getTempDir(), ec);
-		}
-		else {
-			GManager::save();
-		}
-	}
-};
-struct $modify(EditorPauseLayer) {
-	$override
-	void saveLevel() {
-		SKIP_SAVING_LLM = true;
-		EditorPauseLayer::saveLevel();
-		SKIP_SAVING_LLM = false;
+// 			// If saving local levels succeeded, delete temp dir
+// 			std::error_code ec;
+// 			std::filesystem::remove_all(getTempDir(), ec);
+// 		}
+// 		else {
+// 			GManager::save();
+// 		}
+// 	}
+// };
+// struct $modify(EditorPauseLayer) {
+// 	$override
+// 	void saveLevel() {
+// 		SKIP_SAVING_LLM = true;
+// 		EditorPauseLayer::saveLevel();
+// 		SKIP_SAVING_LLM = false;
 
-    	(void)file::createDirectoryAll(getTempDir());
-		auto id = getFreeIDInDir(m_editorLayer->m_level->m_levelName, getTempDir(), "gmd");
-		auto save = gmd::exportLevelAsGmd(m_editorLayer->m_level, getTempDir() / id);
-		if (!save) {
-			log::error("Unable to save level '{}': {}", m_editorLayer->m_level->m_levelName, save.unwrapErr());
-		}
-	}
-};
+//     	(void)file::createDirectoryAll(getTempDir());
+// 		auto id = getFreeIDInDir(m_editorLayer->m_level->m_levelName, getTempDir(), "gmd");
+// 		auto save = gmd::exportLevelAsGmd(m_editorLayer->m_level, getTempDir() / id);
+// 		if (!save) {
+// 			log::error("Unable to save level '{}': {}", m_editorLayer->m_level->m_levelName, save.unwrapErr());
+// 		}
+// 	}
+// };
 struct $modify(MenuLayer) {
     $override
     bool init() {
